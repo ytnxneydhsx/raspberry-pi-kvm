@@ -5,3 +5,5 @@ device_discovery:
     resource_subsystems:
       - tty
       - net
+  history:
+    storage_file: ../storage/history/device-events.jsonl

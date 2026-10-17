@@ -5,3 +5,5 @@ __pycache__/
 *.py[cod]
 code/storage/rules/*.lock
 code/storage/rules/.*.tmp
+code/storage/history/*.jsonl
+code/storage/history/*.lock

@@ -1,6 +1,6 @@
 # 设备发现与识别模块
 
-当前已生成规则管理与匹配模块，以及系统设备采集模块，供后续编排层直接调用。代码未接入真实设备，功能与并发行为尚待运行验证。
+当前已生成规则管理与匹配、系统设备采集、追加式历史记录三个基础模块，供后续编排层直接调用。代码未接入真实设备，功能与并发行为尚待运行验证。
 
 ## 环境与入口
 
@@ -8,8 +8,8 @@
 - YAML 解析使用 `PyYAML==6.0.3`；文件锁采用 `fcntl.flock`，当前不支持 Windows。
 - Linux 设备枚举和热插拔监听使用 `pyudev==0.24.5`。
 - 源码根目录为项目下的 `code/`。开发阶段从仓库根目录运行时，将它加入 Python 模块搜索路径，例如 `PYTHONPATH=code`。
-- 业务代码从 `device_discovery.rules` 或 `device_discovery.collector` 导入，避免引用内部文件。
-- 配置文件为 `code/config/application.yaml`，分别保存规则路径和采集资源子系统。
+- 业务代码从 `device_discovery.rules`、`device_discovery.collector` 或 `device_discovery.history` 导入，避免引用内部文件。
+- 配置文件为 `code/config/application.yaml`，分别保存规则路径、采集资源子系统和历史文件路径。
 - `rules/base.py` 定义 `RuleStore` 抽象基类，`rules/models.py` 定义 `Rule` 数据结构；`rules/errors.py` 定义公开异常。
 - `rules/_json_store.py`、`rules/_validation.py`、`rules/_file_lock.py` 是内部实现，下划线表示不属于稳定公开 API。
 - `get_rule_store()` 是日常入口：首次调用时读取 YAML、创建并初始化仓库，之后在同一进程内返回同一个对象。
@@ -23,8 +23,9 @@ code/
 │   └── application.yaml       # 各模块的可读配置
 ├── requirements.txt           # Python 依赖
 ├── storage/
-│   └── rules/
-│       └── device-rules.json # 默认规则数据
+│   ├── rules/
+│   │   └── device-rules.json  # 默认规则数据
+│   └── history/               # 运行时创建，历史和锁文件不提交
 └── device_discovery/
     ├── __init__.py
     ├── README.md
@@ -35,6 +36,15 @@ code/
     │   ├── errors.py          # 公开异常
     │   ├── _config.py         # 读取采集模块 YAML 配置
     │   └── _udev_collector.py # Linux udev 实现
+    ├── history/
+    │   ├── __init__.py        # 历史模块公开入口和默认实例
+    │   ├── base.py            # DeviceHistoryStore 抽象基类
+    │   ├── models.py          # 持久化记录与资源数据结构
+    │   ├── errors.py          # 公开异常
+    │   ├── _config.py         # 读取历史模块 YAML 配置
+    │   ├── _file_lock.py      # 追加写入的独占文件锁
+    │   ├── _serialization.py  # JSON Lines 序列化与字段检查
+    │   └── _json_lines_store.py # 追加式文件实现
     └── rules/
         ├── __init__.py        # 规则模块公开入口和默认实例
         ├── _config.py         # 读取规则模块的 YAML 配置
@@ -97,7 +107,44 @@ device_discovery:
 
 监听没有设置单一 udev 子系统过滤器，因为一个物理 USB 设备可能分别产生 `usb`、`tty` 和 `net` 事件。内部回调按配置和 USB 父子关系筛选；若以后确认事件量造成实际负担，再评估多个带内核过滤的监听器。
 
-## 调用示例
+## 追加式历史记录模块
+
+编排层先把已经匹配成功的设备观察结果组织成 `DeviceHistoryRecord`，随后调用历史仓库：
+
+```python
+from device_discovery.history import get_history_store
+
+history_store = get_history_store()
+history_store.append(record)
+# 返回后，这一行记录已经执行文件 fsync。
+```
+
+默认入口 `get_history_store()` 在首次调用时读取配置、创建目录和文件，并在同一进程内复用仓库对象。`create_history_store(path)` 用于显式创建独立对象；调用方需要先执行 `initialize()`。
+
+历史文件使用 JSON Lines，每一行是一条独立 JSON 记录，包含：
+
+- `schema_version`：当前为 `1`，供后续兼容格式变化。
+- `matched_key`：规则模块匹配得到的设备类型 Key。
+- 观察时间、来源、动作、USB 位置和系统路径。
+- VID/PID、名称、序列号、驱动等可选信息。
+- USB interface、串口和网络资源列表。
+- 触发增量事件的子系统、系统路径和 udev 序号。
+
+历史路径配置为：
+
+```yaml
+device_discovery:
+  history:
+    storage_file: ../storage/history/device-events.jsonl
+```
+
+`append()` 先完成记录类型、必填文本和带时区时间检查，再在独占文件锁内使用追加模式写入完整 JSON 行并执行 `fsync`。写入或同步失败会抛出 `HistoryFileError`，调用方不能把该记录作为正常结果输出。锁文件固定为历史文件名加 `.lock`，多个遵守同一接口的进程可以串行追加。
+
+历史文件长期保留，模块不执行过期清理、覆盖、查询、分页、删除或损坏行修复。文件和锁文件属于运行数据，已由 `.gitignore` 排除。初始化只保留或创建文件，不扫描全部既有历史；以后实现查询时按行识别格式或损坏记录。
+
+进程或系统在写入中途异常退出时，最后一行可能不完整；`fsync` 返回错误时，该行也可能已经写入部分或全部内容。模块报告失败且不自动重试，避免隐藏不确定状态。后续查询需要逐行隔离损坏内容，编排层决定是否重试；当前数据流允许重复观察记录。
+
+## 规则模块调用示例
 
 下列示例供阅读，尚未执行；手动运行时会创建并修改指定的本地规则文件。
 
@@ -190,6 +237,6 @@ from device_discovery.rules import (
 
 ## 当前验证状态
 
-仅安排不执行业务调用的语法与静态检查。尚未运行规则增删改、损坏文件恢复场景、多进程锁竞争、真实 USB 扫描或热插拔监听；未操作串口、USB 或板卡。
+仅安排不执行业务调用的语法与静态检查。尚未运行规则增删改、历史实际追加、损坏文件恢复场景、多进程锁竞争、真实 USB 扫描或热插拔监听；未操作串口、USB 或板卡。
 
 设计依据见 [设备发现与模块设计](../../DOC/自动发现与识别接入设备-实现逻辑.md)。
