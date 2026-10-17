@@ -1,0 +1,12 @@
+[Unit]
+Description=Forward FRP TLS ingress to existing FRP control listener
+Requires=frps.service
+After=frps.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd --exit-idle-time=5min 127.0.0.1:7000
+DynamicUser=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

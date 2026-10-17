@@ -1,0 +1,3 @@
+device_discovery:
+  rules:
+    storage_file: ../storage/rules/device-rules.json

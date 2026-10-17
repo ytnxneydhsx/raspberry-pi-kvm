@@ -1,0 +1,18 @@
+{
+  "prepared_date_local": "2026-10-17 Asia/Shanghai",
+  "recorded_at_utc": "2026-10-16T16:09:44.614582+00:00",
+  "architecture": "aarch64",
+  "version": "rkdeveloptool ver 1.32",
+  "source": "https://github.com/rockchip-linux/rkdeveloptool",
+  "commit": "304f073752fd25c854e1bcf05d8e7f925b1f4e14",
+  "binary_sha256": "5a9aee168f7896ef65d5145724e1bc90fdf9e6001f428371e91e0f6ab326e687",
+  "build_commands": [
+    "./autogen.sh",
+    "./configure",
+    "make -j2",
+    "sudo make install"
+  ],
+  "source_tracked_files_unmodified": true,
+  "loader_or_maskrom_detected": false,
+  "firmware_files": "No board-verified firmware or backup files have been added"
+}

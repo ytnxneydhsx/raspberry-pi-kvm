@@ -1,0 +1,21 @@
+[Unit]
+Description=Raspberry Pi 4B reverse SSH tunnel via Alibaba Cloud FRP
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=huangnv
+Group=huangnv
+ExecStart=/usr/local/bin/frpc-rpi4b -c /etc/frp/frpc-rpi4b.toml
+Restart=always
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

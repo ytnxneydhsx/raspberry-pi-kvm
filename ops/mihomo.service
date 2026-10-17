@@ -1,0 +1,24 @@
+[Unit]
+Description=Local HTTP and SOCKS proxy for Raspberry Pi applications
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=huangnv
+Group=huangnv
+StateDirectory=mihomo
+WorkingDirectory=/var/lib/mihomo
+ExecStart=/usr/local/bin/mihomo -d /var/lib/mihomo -f /etc/mihomo/config.yaml
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+.private/
+downloads/
+.DS_Store
+__pycache__/
+*.py[cod]
+code/storage/rules/*.lock
+code/storage/rules/.*.tmp
