@@ -1,3 +1,7 @@
 device_discovery:
   rules:
     storage_file: ../storage/rules/device-rules.json
+  collector:
+    resource_subsystems:
+      - tty
+      - net

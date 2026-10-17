@@ -1,14 +1,15 @@
 # 设备发现与识别模块
 
-当前已生成规则管理与匹配模块，供后续编排层直接调用。代码未接入真实设备，功能与并发行为尚待运行验证。
+当前已生成规则管理与匹配模块，以及系统设备采集模块，供后续编排层直接调用。代码未接入真实设备，功能与并发行为尚待运行验证。
 
 ## 环境与入口
 
-- Python 3.10 或更新版本，Linux/macOS。
+- Python 3.10 或更新版本。规则模块支持 Linux/macOS；设备采集模块依赖 Linux 的 udev。
 - YAML 解析使用 `PyYAML==6.0.3`；文件锁采用 `fcntl.flock`，当前不支持 Windows。
+- Linux 设备枚举和热插拔监听使用 `pyudev==0.24.5`。
 - 源码根目录为项目下的 `code/`。开发阶段从仓库根目录运行时，将它加入 Python 模块搜索路径，例如 `PYTHONPATH=code`。
-- 业务代码从 `device_discovery.rules` 导入，避免引用内部文件。
-- 配置文件为 `code/config/application.yaml`，规则路径读取自 `device_discovery.rules.storage_file`。
+- 业务代码从 `device_discovery.rules` 或 `device_discovery.collector` 导入，避免引用内部文件。
+- 配置文件为 `code/config/application.yaml`，分别保存规则路径和采集资源子系统。
 - `rules/base.py` 定义 `RuleStore` 抽象基类，`rules/models.py` 定义 `Rule` 数据结构；`rules/errors.py` 定义公开异常。
 - `rules/_json_store.py`、`rules/_validation.py`、`rules/_file_lock.py` 是内部实现，下划线表示不属于稳定公开 API。
 - `get_rule_store()` 是日常入口：首次调用时读取 YAML、创建并初始化仓库，之后在同一进程内返回同一个对象。
@@ -27,6 +28,13 @@ code/
 └── device_discovery/
     ├── __init__.py
     ├── README.md
+    ├── collector/
+    │   ├── __init__.py        # 采集模块公开入口和默认实例
+    │   ├── base.py            # DeviceCollector 抽象基类
+    │   ├── models.py          # 观察结果与资源数据结构
+    │   ├── errors.py          # 公开异常
+    │   ├── _config.py         # 读取采集模块 YAML 配置
+    │   └── _udev_collector.py # Linux udev 实现
     └── rules/
         ├── __init__.py        # 规则模块公开入口和默认实例
         ├── _config.py         # 读取规则模块的 YAML 配置
@@ -51,6 +59,43 @@ code/
 ```bash
 python3 -m pip install -r code/requirements.txt
 ```
+
+## 系统设备采集模块
+
+编排层从 `device_discovery.collector` 导入公开接口：
+
+```python
+from device_discovery.collector import get_device_collector
+
+collector = get_device_collector()
+
+# 启动时建议先监听，再扫描；编排层处理两者之间可能出现的重复观察。
+collector.start(handle_device_event)
+current_devices = collector.scan()
+
+# 服务退出时停止后台监听。
+collector.stop()
+```
+
+`scan()` 返回当前每个外接 USB 设备的一条 `DeviceObservation`，并把 USB 接口、串口和网络资源归入 `resources`。扫描结果使用 `source=scan`、`action=present`，根集线器不作为外接设备返回。
+
+`start(callback)` 使用 `pyudev.MonitorObserver` 在后台线程监听。USB 父设备以及配置子系统中的事件会转换成相同的 `DeviceObservation`；`event_subsystem`、`event_system_path` 和 `event_sequence_number` 标明本次事件的触发对象。回调也运行在监听线程中，应尽快把结果交给编排层。
+
+当前配置归并 `tty` 和 `net` 子系统，USB interface 始终归并，以保留 `ch341`、`cdc_acm`、`cdc_ncm` 等接口驱动信息：
+
+```yaml
+device_discovery:
+  collector:
+    resource_subsystems:
+      - tty
+      - net
+```
+
+采集模块只读取 Linux 已经公开的设备元数据。它不读取关注规则、不判断 CH340 或板卡类型、不打开 `/dev/ttyUSB*`、不设置波特率、不登录网络接口，也不保存历史。VID/PID 缺失时保留为 `None`，由编排层决定是否交给规则模块。
+
+业务代码使用 `get_device_collector()` 获得进程内共享实例，避免同一进程重复启动监听器；独立场景可使用 `create_device_collector()`。同一个采集器重复 `start()` 会抛出 `CollectorStateError`，`stop()` 可重复调用。
+
+监听没有设置单一 udev 子系统过滤器，因为一个物理 USB 设备可能分别产生 `usb`、`tty` 和 `net` 事件。内部回调按配置和 USB 父子关系筛选；若以后确认事件量造成实际负担，再评估多个带内核过滤的监听器。
 
 ## 调用示例
 
@@ -145,6 +190,6 @@ from device_discovery.rules import (
 
 ## 当前验证状态
 
-仅安排不执行业务调用的语法与静态检查。尚未运行规则增删改、损坏文件恢复场景或多进程锁竞争验证；未操作串口、USB 或板卡。
+仅安排不执行业务调用的语法与静态检查。尚未运行规则增删改、损坏文件恢复场景、多进程锁竞争、真实 USB 扫描或热插拔监听；未操作串口、USB 或板卡。
 
 设计依据见 [设备发现与模块设计](../../DOC/自动发现与识别接入设备-实现逻辑.md)。
