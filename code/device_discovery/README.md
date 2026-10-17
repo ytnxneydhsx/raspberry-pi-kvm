@@ -1,6 +1,6 @@
 # 设备发现与识别模块
 
-当前已生成规则管理与匹配、系统设备采集、追加式历史记录三个基础模块，供后续编排层直接调用。代码未接入真实设备，功能与并发行为尚待运行验证。
+当前已生成规则管理与匹配、系统设备采集、追加式历史记录三个基础模块，以及连接它们的最小编排层。代码未接入真实设备，功能与并发行为尚待运行验证。
 
 ## 环境与入口
 
@@ -8,7 +8,7 @@
 - YAML 解析使用 `PyYAML==6.0.3`；文件锁采用 `fcntl.flock`，当前不支持 Windows。
 - Linux 设备枚举和热插拔监听使用 `pyudev==0.24.5`。
 - 源码根目录为项目下的 `code/`。开发阶段从仓库根目录运行时，将它加入 Python 模块搜索路径，例如 `PYTHONPATH=code`。
-- 业务代码从 `device_discovery.rules`、`device_discovery.collector` 或 `device_discovery.history` 导入，避免引用内部文件。
+- 业务代码从 `device_discovery.rules`、`device_discovery.collector`、`device_discovery.history` 或 `device_discovery.orchestration` 导入，避免引用内部文件。
 - 配置文件为 `code/config/application.yaml`，分别保存规则路径、采集资源子系统和历史文件路径。
 - `rules/base.py` 定义 `RuleStore` 抽象基类，`rules/models.py` 定义 `Rule` 数据结构；`rules/errors.py` 定义公开异常。
 - `rules/_json_store.py`、`rules/_validation.py`、`rules/_file_lock.py` 是内部实现，下划线表示不属于稳定公开 API。
@@ -45,6 +45,12 @@ code/
     │   ├── _file_lock.py      # 追加写入的独占文件锁
     │   ├── _serialization.py  # JSON Lines 序列化与字段检查
     │   └── _json_lines_store.py # 追加式文件实现
+    ├── orchestration/
+    │   ├── __init__.py        # 编排层公开入口和默认实例
+    │   ├── models.py          # 分类结果、失败阶段和扫描报告
+    │   ├── errors.py          # 生命周期与扫描异常
+    │   ├── _mapping.py        # 观察结果到历史记录的转换
+    │   └── _service.py        # 调用顺序与生命周期实现
     └── rules/
         ├── __init__.py        # 规则模块公开入口和默认实例
         ├── _config.py         # 读取规则模块的 YAML 配置
@@ -144,6 +150,48 @@ device_discovery:
 
 进程或系统在写入中途异常退出时，最后一行可能不完整；`fsync` 返回错误时，该行也可能已经写入部分或全部内容。模块报告失败且不自动重试，避免隐藏不确定状态。后续查询需要逐行隔离损坏内容，编排层决定是否重试；当前数据流允许重复观察记录。
 
+## 最小编排层
+
+默认编排器连接规则、采集和历史三个共享实例：
+
+```python
+from device_discovery.orchestration import get_orchestrator
+
+orchestrator = get_orchestrator()
+startup_report = orchestrator.start(
+    result_callback=handle_recognized_device,
+    failure_callback=handle_processing_failure,
+)
+
+# 服务退出时调用。
+orchestrator.stop()
+```
+
+`start()` 先建立增量监听，再进行一次全量扫描，减少两步之间漏掉设备变化的窗口。扫描与增量事件都执行同一条处理链：
+
+```text
+DeviceObservation
+    → 检查 VID/PID
+    → RuleStore.match()
+    → 构造 DeviceHistoryRecord
+    → DeviceHistoryStore.append()
+    → 保存成功后发送 RecognizedDevice
+```
+
+每条观察结果分为：
+
+- `RecognizedDevice`：规则已经匹配，历史已经保存，可以向外提供。
+- `IgnoredDevice`：VID/PID 缺失或未匹配关注规则，不写历史、不发正常回调。
+- `ProcessingFailure`：规则读取、历史构造、历史追加或结果回调失败，包含失败阶段和原始异常。
+
+全量 `scan()` 返回 `ScanReport`，分别包含三类结果。增量事件在采集器线程中处理，主动扫描的回调在调用 `scan()` 的线程中执行，因此回调实现需要允许两条路径并发调用。正常结果进入 `result_callback`，失败进入 `failure_callback`；回调异常会被转换为 `RESULT_CALLBACK` 失败，不会中止设备监听。
+
+编排器使用进程内处理锁，让全量扫描取得快照并完成对应的规则匹配和历史追加后，再处理等待中的热插拔事件。重复扫描和重复观察仍允许产生多条历史，不进行差分或去重。停止期间到达的新事件被忽略；已经开始处理的单条记录允许完成。
+
+`add_rule()`、`update_rule()` 和 `delete_rule()` 在进程内串行执行规则保存、设备扫描、匹配和历史追加。锁释放后再发送对外回调，避免回调再次调用规则接口时发生自我阻塞。返回的 `RuleChangeReport` 分开表达已经保存的规则、扫描报告和扫描级错误；重新扫描失败不会把已经完成的规则修改描述为失败。
+
+`get_orchestrator()` 返回进程内共享实例并创建 Linux 采集器。需要替代实现或静态验证时，可通过 `create_orchestrator(rule_store=..., collector=..., history_store=...)` 显式传入三个依赖。
+
 ## 规则模块调用示例
 
 下列示例供阅读，尚未执行；手动运行时会创建并修改指定的本地规则文件。
@@ -237,6 +285,6 @@ from device_discovery.rules import (
 
 ## 当前验证状态
 
-仅安排不执行业务调用的语法与静态检查。尚未运行规则增删改、历史实际追加、损坏文件恢复场景、多进程锁竞争、真实 USB 扫描或热插拔监听；未操作串口、USB 或板卡。
+仅安排不执行业务调用的语法与静态检查。尚未运行编排流程、规则增删改、历史实际追加、损坏文件恢复场景、多进程锁竞争、真实 USB 扫描或热插拔监听；未操作串口、USB 或板卡。
 
 设计依据见 [设备发现与模块设计](../../DOC/自动发现与识别接入设备-实现逻辑.md)。
