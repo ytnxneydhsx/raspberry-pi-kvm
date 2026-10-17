@@ -24,6 +24,26 @@
 ssh rpi4b-aliyun
 ```
 
+## 项目仓库与 GitHub
+
+树莓派上的项目路径：
+
+```text
+/home/huangnv/src/raspberry-pi-kvm
+```
+
+仓库远程为 `git@github.com:ytnxneydhsx/raspberry-pi-kvm.git`。树莓派已配置 Git 提交身份 `娜娜米 <ytnxneydhsx@users.noreply.github.com>`，并使用独立 SSH 密钥访问 GitHub 账号 `ytnxneydhsx`。私钥只保存于树莓派 `~/.ssh/`，仓库不保存密钥内容。
+
+在树莓派开始修改前：
+
+```bash
+cd ~/src/raspberry-pi-kvm
+git status
+git pull --ff-only
+```
+
+完成修改后按项目 `AGENTS.md` 的要求提交并推送。Mac 端需在后续修改前拉取远程更新，使两端基于同一个提交继续工作。
+
 ## mihomo 服务
 
 查看状态：

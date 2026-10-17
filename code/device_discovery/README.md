@@ -192,6 +192,37 @@ DeviceObservation
 
 `get_orchestrator()` 返回进程内共享实例并创建 Linux 采集器。需要替代实现或静态验证时，可通过 `create_orchestrator(rule_store=..., collector=..., history_store=...)` 显式传入三个依赖。
 
+## 树莓派部署
+
+2026-10-18 已将仓库部署到：
+
+```text
+/home/huangnv/src/raspberry-pi-kvm
+```
+
+树莓派仓库的 `origin` 为 `git@github.com:ytnxneydhsx/raspberry-pi-kvm.git`，已配置用户 `huangnv` 的 Git 提交身份和专用 GitHub SSH 密钥。私钥仅保存在树莓派的 `~/.ssh/` 中，不得加入仓库或文档。
+
+在树莓派开始工作：
+
+```bash
+ssh rpi4b-aliyun
+cd ~/src/raspberry-pi-kvm
+git pull --ff-only
+```
+
+树莓派完成修改后：
+
+```bash
+git status
+git add <files>
+git commit -m "<message>"
+git push origin main
+```
+
+Mac 端在自己开始新修改前执行 `git pull --ff-only`。两端不应同时修改同一文件；发现未提交内容或分支分叉时，先保留现场并查明来源。
+
+部署时的只读检查确认树莓派为 Debian 13 `aarch64`、Python 3.13.5，且可导入 `yaml` 和 `pyudev`。当时系统同时可见 CH340 `1a86:7523`、USB 复合 Gadget `1d6b:0104`、`/dev/ttyUSB0`、`/dev/ttyACM0` 和 `usb0`。尚未启动编排器，这些环境证据不代表功能运行验证通过。
+
 ## 规则模块调用示例
 
 下列示例供阅读，尚未执行；手动运行时会创建并修改指定的本地规则文件。
