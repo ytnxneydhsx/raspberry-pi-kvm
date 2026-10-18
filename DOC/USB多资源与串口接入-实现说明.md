@@ -26,6 +26,7 @@ Linux 设备资源
 ## 已确认的使用行为
 
 - 串口配置项维护在 `code/device_access/serial_driver_options.json`，运行时按发现结果中的驱动名读取；未知驱动使用 `default`。用户选择具体值，候选项属于程序维护的配置说明，不宣称由 `.ko` 自动返回或代表实机完整支持清单。
+- `tty`／`net` 子资源记录所属 USB 接口的驱动名，例如 `ttyACM0.driver = cdc_acm`、`ttyUSB0.driver = ch341`，供配置选择直接使用。
 - 当前 RK3588 Linux USB Gadget 的 `cdc_acm` 只向用户提供读写超时；线路编码参数使用内部默认值，不作为 USB 传输速率选项。`ch341` 继续提供波特率等真实 UART 线路参数。
 - 用户配置保存为命名方案，手动选择复用，不自动绑定板卡或端口。
 - 构造对象与发现回调不自动连接；用户显式连接。

@@ -46,7 +46,7 @@ device_access/
 
 ## 配置项与命名方案
 
-`get_serial_config_fields(driver)` 使用发现结果中的 Linux 驱动名读取 `serial_driver_options.json`。当前维护 `ch341`、`cdc_acm` 和未知驱动使用的 `default`；以后直接修改 JSON 即可增加或调整驱动选项。`ch341` 展示线路参数；当前 RK3588 Linux USB Gadget 使用的 `cdc_acm` 只展示读写超时，波特率、数据位、校验位、停止位、流控、DTR 和 RTS 使用 `SerialConfig` 内部默认值。USB Bulk 传输速度不由 CDC Line Coding 的波特率控制。
+`get_serial_config_fields(driver)` 使用发现结果中的 Linux 驱动名读取 `serial_driver_options.json`。发现层会把 USB 接口驱动归到其 `tty`／`net` 子资源，因此调用方可以直接传入 `resource.driver`。当前维护 `ch341`、`cdc_acm` 和未知驱动使用的 `default`；以后直接修改 JSON 即可增加或调整驱动选项。`ch341` 展示线路参数；当前 RK3588 Linux USB Gadget 使用的 `cdc_acm` 只展示读写超时，波特率、数据位、校验位、停止位、流控、DTR 和 RTS 使用 `SerialConfig` 内部默认值。USB Bulk 传输速度不由 CDC Line Coding 的波特率控制。
 
 默认方案路径在 `application.yaml`：
 

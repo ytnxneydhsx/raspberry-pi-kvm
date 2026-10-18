@@ -213,9 +213,19 @@ class UdevDeviceCollector(DeviceCollector):
             name=device.sys_name,
             device_type=device.device_type,
             device_node=device.device_node,
-            driver=device.driver,
+            driver=self._resource_driver(device),
             interface_number=self._text_property(device, "ID_USB_INTERFACE_NUM"),
         )
+
+    def _resource_driver(self, device: Any) -> str | None:
+        """返回资源实际使用的驱动；tty/net 通常继承自 USB 接口。"""
+        if device.driver:
+            return device.driver
+        driver = self._text_property(device, "ID_USB_DRIVER")
+        if driver:
+            return driver
+        interface = device.find_parent("usb", _USB_INTERFACE_TYPE)
+        return None if interface is None else interface.driver
 
     def _build_observation(
         self,
