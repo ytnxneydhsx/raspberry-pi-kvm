@@ -1,2 +1,3 @@
 PyYAML==6.0.3
 pyudev==0.24.5; sys_platform == "linux"
+pyserial==3.5

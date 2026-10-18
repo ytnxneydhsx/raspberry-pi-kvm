@@ -7,3 +7,6 @@ code/storage/rules/*.lock
 code/storage/rules/.*.tmp
 code/storage/history/*.jsonl
 code/storage/history/*.lock
+code/storage/serial-profiles/*.json
+code/storage/serial-profiles/*.lock
+code/storage/serial-profiles/.*.tmp

@@ -2,6 +2,8 @@
 
 当前已生成规则管理与匹配、系统设备采集、追加式历史记录三个基础模块，以及连接它们的最小编排层。代码未接入真实设备，功能与并发行为尚待运行验证。
 
+后续消费 `RecognizedDevice` 的 [USB 多资源与串口接入模块](../device_access/README.md) 已独立放在 `code/device_access/`。它复用这里的 `observation.resources`，由调用方显式连接，采集器和编排器不会自动打开串口或修改网络。默认关注规则增加当前观察到的 `USB_OTG = 1d6b:0104`，该标签只表示匹配的 USB 类型，不证明具体板卡身份或可用功能。
+
 ## 环境与入口
 
 - Python 3.10 或更新版本。规则模块支持 Linux/macOS；设备采集模块依赖 Linux 的 udev。

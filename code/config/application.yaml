@@ -7,3 +7,6 @@ device_discovery:
       - net
   history:
     storage_file: ../storage/history/device-events.jsonl
+device_access:
+  serial_profiles:
+    storage_file: ../storage/serial-profiles/profiles.json
