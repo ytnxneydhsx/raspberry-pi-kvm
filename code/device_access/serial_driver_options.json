@@ -117,34 +117,8 @@
     },
     "cdc_acm": {
       "display_name": "USB CDC ACM 虚拟串口",
+      "description": "面向当前 RK3588 Linux USB Gadget；线路编码使用内部默认值，不作为用户可调传输速率",
       "parameters": {
-        "baudrate": {
-          "type": "integer",
-          "default": 115200,
-          "choices": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
-          "allow_custom": true,
-          "description": "应用维护的常用候选值；USB Gadget 是否使用该值由板端实现决定"
-        },
-        "bytesize": {
-          "type": "integer",
-          "default": 8,
-          "choices": [5, 6, 7, 8]
-        },
-        "parity": {
-          "type": "string",
-          "default": "N",
-          "choices": ["N", "E", "O", "M", "S"]
-        },
-        "stopbits": {
-          "type": "number",
-          "default": 1,
-          "choices": [1, 1.5, 2]
-        },
-        "flow_control": {
-          "type": "string",
-          "default": "none",
-          "choices": ["none", "rtscts", "xonxoff"]
-        },
         "timeout": {
           "type": "number",
           "default": 0.5,
@@ -158,16 +132,6 @@
           "choices": [],
           "allow_custom": true,
           "description": "写入超时秒数"
-        },
-        "dtr": {
-          "type": "boolean",
-          "default": false,
-          "choices": [false, true]
-        },
-        "rts": {
-          "type": "boolean",
-          "default": false,
-          "choices": [false, true]
         }
       }
     }
