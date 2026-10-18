@@ -6,7 +6,7 @@
 
 - 从 `RecognizedDevice` 创建 USB 能力对象，保留匹配名称、完整观察结果及资源列表。
 - `serial_resources` 只包含有 `device_node` 的 `tty` 资源；`network_resources` 保留 `net` 资源。USB interface 元数据仍在 `resources` 中。
-- 串口配置项统一提供，ACM 与 CH340 等标准串口共用实现，每个资源独立创建连接和选择配置。
+- 串口配置项由内置 JSON 按 Linux 驱动名提供，每个资源独立创建连接和选择配置。
 - 保存、读取、列出、删除命名串口方案；方案不绑定设备、USB 位置或板子。
 - 由调用方显式 `open()`；发现设备、创建对象、列举配置或获取串口对象都不打开端口。
 - `read()` 返回原始 `bytes`，`write()` 返回实际写入字节数；不自动解码、分行、发送探测数据或保存通信正文。
@@ -19,7 +19,7 @@
 
 原有发现模块已经按 USB 父设备归并资源。新模块消费其公开结果，不改 VID/PID 匹配和先存历史再输出的链路。Linux 和 pySerial 已提供统一串口接口，因此不为 CH340、CH341、CDC ACM 分别复制通信类；新增的薄适配层用于 ABC 调用约定、配置方案、资源生命周期和一致的错误处理。实际收益是调用方可以明确选择资源、确认参数后通信，不据此承诺吞吐量或时延改善。
 
-USB 父对象负责多资源组织；字节流接口只给串口。特殊芯片的能力限制需要以后按实际资料补充，通用配置选项不伪装成驱动精确返回的全部能力。
+USB 父对象负责多资源组织；字节流接口只给串口。程序在 `serial_driver_options.json` 中维护驱动配置说明，系统不会从 `.ko` 自动返回完整选项清单。
 
 ## 环境与目录
 
@@ -34,6 +34,7 @@ device_access/
   __init__.py       公开类型和工厂
   base.py           SerialChannel 抽象基类
   models.py         SerialConfig、ConfigField、ChannelState
+  serial_driver_options.json  驱动名对应的配置字段与候选值
   errors.py         公开异常
   _usb.py           一个 USB 设备及其资源、连接生命周期
   _serial.py        pySerial 适配
@@ -45,7 +46,7 @@ device_access/
 
 ## 配置项与命名方案
 
-`get_serial_config_fields()` 返回应用定义的通用配置项说明。波特率候选只是常用建议值，可填其他正整数；数据位、校验位、停止位、流控等在 `SerialConfig` 构造时完成格式校验。具体组合、精度以及是否忽略某项，仍由系统驱动和设备实现决定。
+`get_serial_config_fields(driver)` 使用发现结果中的 Linux 驱动名读取 `serial_driver_options.json`。当前维护 `ch341`、`cdc_acm` 和未知驱动使用的 `default`；以后直接修改 JSON 即可增加或调整驱动选项。候选值属于应用维护的选择范围，具体组合、精度以及板端是否使用某项仍由系统驱动和设备实现决定。
 
 默认方案路径在 `application.yaml`：
 
@@ -60,7 +61,7 @@ device_access:
 ```python
 from device_access import SerialConfig, create_profile_store, get_serial_config_fields
 
-fields = get_serial_config_fields()  # 无设备或文件写入
+fields = get_serial_config_fields(resource.driver)  # 例如 ch341 或 cdc_acm
 profiles = create_profile_store()  # 构造对象，不创建文件
 profiles.initialize()
 profiles.save("ACM 调试", SerialConfig(baudrate=115200))

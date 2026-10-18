@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "drivers": {
+    "default": {
+      "display_name": "通用 Linux TTY",
+      "parameters": {
+        "baudrate": {
+          "type": "integer",
+          "default": 115200,
+          "choices": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          "allow_custom": true,
+          "description": "常用建议值；可填写其他正整数，实际支持和精度由驱动与设备决定"
+        },
+        "bytesize": {
+          "type": "integer",
+          "default": 8,
+          "choices": [5, 6, 7, 8]
+        },
+        "parity": {
+          "type": "string",
+          "default": "N",
+          "choices": ["N", "E", "O", "M", "S"]
+        },
+        "stopbits": {
+          "type": "number",
+          "default": 1,
+          "choices": [1, 1.5, 2]
+        },
+        "flow_control": {
+          "type": "string",
+          "default": "none",
+          "choices": ["none", "rtscts", "xonxoff"]
+        },
+        "timeout": {
+          "type": "number",
+          "default": 0.5,
+          "choices": [],
+          "allow_custom": true,
+          "description": "读取超时秒数；0 表示非阻塞，超时返回空字节不等于掉线"
+        },
+        "write_timeout": {
+          "type": "number",
+          "default": 2.0,
+          "choices": [],
+          "allow_custom": true,
+          "description": "写入超时秒数；发生超时可能已经发送部分数据"
+        },
+        "dtr": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true],
+          "description": "打开时请求的 DTR 状态；系统或驱动可能产生瞬态变化"
+        },
+        "rts": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true],
+          "description": "无硬件流控时的 RTS 请求状态；RTS/CTS 模式由驱动控制"
+        }
+      }
+    },
+    "ch341": {
+      "display_name": "CH340 / CH341 USB 串口",
+      "parameters": {
+        "baudrate": {
+          "type": "integer",
+          "default": 115200,
+          "choices": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          "allow_custom": true,
+          "description": "应用维护的常用候选值；驱动会计算分频参数"
+        },
+        "bytesize": {
+          "type": "integer",
+          "default": 8,
+          "choices": [5, 6, 7, 8]
+        },
+        "parity": {
+          "type": "string",
+          "default": "N",
+          "choices": ["N", "E", "O", "M", "S"]
+        },
+        "stopbits": {
+          "type": "number",
+          "default": 1,
+          "choices": [1, 2]
+        },
+        "flow_control": {
+          "type": "string",
+          "default": "none",
+          "choices": ["none", "rtscts", "xonxoff"]
+        },
+        "timeout": {
+          "type": "number",
+          "default": 0.5,
+          "choices": [],
+          "allow_custom": true,
+          "description": "读取超时秒数；0 表示非阻塞"
+        },
+        "write_timeout": {
+          "type": "number",
+          "default": 2.0,
+          "choices": [],
+          "allow_custom": true,
+          "description": "写入超时秒数"
+        },
+        "dtr": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true]
+        },
+        "rts": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true]
+        }
+      }
+    },
+    "cdc_acm": {
+      "display_name": "USB CDC ACM 虚拟串口",
+      "parameters": {
+        "baudrate": {
+          "type": "integer",
+          "default": 115200,
+          "choices": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          "allow_custom": true,
+          "description": "应用维护的常用候选值；USB Gadget 是否使用该值由板端实现决定"
+        },
+        "bytesize": {
+          "type": "integer",
+          "default": 8,
+          "choices": [5, 6, 7, 8]
+        },
+        "parity": {
+          "type": "string",
+          "default": "N",
+          "choices": ["N", "E", "O", "M", "S"]
+        },
+        "stopbits": {
+          "type": "number",
+          "default": 1,
+          "choices": [1, 1.5, 2]
+        },
+        "flow_control": {
+          "type": "string",
+          "default": "none",
+          "choices": ["none", "rtscts", "xonxoff"]
+        },
+        "timeout": {
+          "type": "number",
+          "default": 0.5,
+          "choices": [],
+          "allow_custom": true,
+          "description": "读取超时秒数；0 表示非阻塞"
+        },
+        "write_timeout": {
+          "type": "number",
+          "default": 2.0,
+          "choices": [],
+          "allow_custom": true,
+          "description": "写入超时秒数"
+        },
+        "dtr": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true]
+        },
+        "rts": {
+          "type": "boolean",
+          "default": false,
+          "choices": [false, true]
+        }
+      }
+    }
+  }
+}

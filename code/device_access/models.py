@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 from .errors import InvalidSerialConfigError
 
@@ -67,24 +69,43 @@ class ConfigField:
     description: str = ""
 
 
-def get_serial_config_fields() -> tuple[ConfigField, ...]:
-    """提供通用选项，不打开设备或探测波特率。"""
-    defaults = SerialConfig()
-    return (
-        ConfigField("baudrate", "integer", defaults.baudrate,
-                    (9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600),
-                    True, "常用建议值；可填写正整数，实际支持和精度由驱动与设备决定"),
-        ConfigField("bytesize", "integer", defaults.bytesize, (5, 6, 7, 8)),
-        ConfigField("parity", "string", defaults.parity, ("N", "E", "O", "M", "S")),
-        ConfigField("stopbits", "number", defaults.stopbits, (1, 1.5, 2)),
-        ConfigField("flow_control", "string", defaults.flow_control,
-                    ("none", "rtscts", "xonxoff")),
-        ConfigField("timeout", "number", defaults.timeout, allow_custom=True,
-                    description="读取超时秒数；0 表示非阻塞，超时返回空字节不等于掉线"),
-        ConfigField("write_timeout", "number", defaults.write_timeout, allow_custom=True,
-                    description="写入超时秒数；发生超时可能已经发送部分数据"),
-        ConfigField("dtr", "boolean", defaults.dtr, (False, True),
-                    description="打开时请求的 DTR 状态；系统或驱动可能产生瞬态变化"),
-        ConfigField("rts", "boolean", defaults.rts, (False, True),
-                    description="无硬件流控时的 RTS 请求状态；RTS/CTS 模式由驱动控制"),
-    )
+_DRIVER_OPTIONS_PATH = Path(__file__).with_name("serial_driver_options.json")
+
+
+def get_serial_config_fields(driver: str | None = None) -> tuple[ConfigField, ...]:
+    """按 Linux 驱动名读取应用维护的配置选项，不打开或探测设备。"""
+    try:
+        with _DRIVER_OPTIONS_PATH.open("r", encoding="utf-8") as stream:
+            document = json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"无法读取串口驱动配置：{_DRIVER_OPTIONS_PATH}") from exc
+
+    if document.get("version") != 1 or not isinstance(document.get("drivers"), dict):
+        raise RuntimeError("串口驱动配置格式无效")
+
+    definitions = document["drivers"]
+    selected = definitions.get(driver) if driver else None
+    if selected is None:
+        selected = definitions.get("default")
+    if not isinstance(selected, dict) or not isinstance(selected.get("parameters"), dict):
+        raise RuntimeError(f"串口驱动配置缺少可用定义：{driver or 'default'}")
+
+    fields: list[ConfigField] = []
+    for name, raw in selected["parameters"].items():
+        if not isinstance(name, str) or not isinstance(raw, dict):
+            raise RuntimeError("串口驱动参数定义无效")
+        choices = raw.get("choices", [])
+        if not isinstance(choices, list):
+            raise RuntimeError(f"串口驱动参数 choices 必须是数组：{name}")
+        try:
+            fields.append(ConfigField(
+                name=name,
+                value_type=raw["type"],
+                default=raw["default"],
+                choices=tuple(choices),
+                allow_custom=raw.get("allow_custom", False),
+                description=raw.get("description", ""),
+            ))
+        except KeyError as exc:
+            raise RuntimeError(f"串口驱动参数缺少字段：{name}.{exc.args[0]}") from exc
+    return tuple(fields)
