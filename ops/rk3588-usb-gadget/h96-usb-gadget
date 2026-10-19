@@ -1,0 +1,81 @@
+#!/bin/sh
+set -eu
+
+GADGET=/sys/kernel/config/usb_gadget/h96-kvm
+
+wait_for_udc() {
+	count=0
+	while [ "$count" -lt 50 ]; do
+		udc=$(find /sys/class/udc -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | head -n 1)
+		if [ -n "$udc" ]; then
+			printf '%s\n' "$udc"
+			return 0
+		fi
+		count=$((count + 1))
+		sleep 0.1
+	done
+	return 1
+}
+
+start_gadget() {
+	modprobe libcomposite
+	if ! mountpoint -q /sys/kernel/config; then
+		mount -t configfs configfs /sys/kernel/config
+	fi
+
+	mkdir -p "$GADGET"
+	printf '0x1d6b\n' > "$GADGET/idVendor"
+	printf '0x0104\n' > "$GADGET/idProduct"
+	printf '0x0200\n' > "$GADGET/bcdUSB"
+	printf '0x0100\n' > "$GADGET/bcdDevice"
+
+	mkdir -p "$GADGET/strings/0x409"
+	printf 'H96V58RK3588\n' > "$GADGET/strings/0x409/serialnumber"
+	printf 'H96 Max V58\n' > "$GADGET/strings/0x409/manufacturer"
+	printf 'RK3588 USB Console\n' > "$GADGET/strings/0x409/product"
+
+	mkdir -p "$GADGET/configs/c.1/strings/0x409"
+	printf 'ACM serial console\n' > "$GADGET/configs/c.1/strings/0x409/configuration"
+	printf '250\n' > "$GADGET/configs/c.1/MaxPower"
+
+	mkdir -p "$GADGET/functions/acm.usb0"
+	if [ ! -L "$GADGET/configs/c.1/acm.usb0" ]; then
+		ln -s "$GADGET/functions/acm.usb0" "$GADGET/configs/c.1/acm.usb0"
+	fi
+
+	udc=$(wait_for_udc) || {
+		echo 'no USB device controller found' >&2
+		return 1
+	}
+	printf '%s\n' "$udc" > "$GADGET/UDC"
+}
+
+stop_gadget() {
+	if [ ! -d "$GADGET" ]; then
+		return 0
+	fi
+	printf '\n' > "$GADGET/UDC" 2>/dev/null || true
+	rm -f "$GADGET/configs/c.1/acm.usb0"
+	rmdir "$GADGET/functions/acm.usb0" 2>/dev/null || true
+	rmdir "$GADGET/configs/c.1/strings/0x409" 2>/dev/null || true
+	rmdir "$GADGET/configs/c.1" 2>/dev/null || true
+	rmdir "$GADGET/strings/0x409" 2>/dev/null || true
+	rmdir "$GADGET" 2>/dev/null || true
+}
+
+case "${1:-}" in
+	start)
+		start_gadget
+		;;
+	stop)
+		stop_gadget
+		;;
+	restart)
+		stop_gadget
+		start_gadget
+		;;
+	*)
+		echo "usage: $0 {start|stop|restart}" >&2
+		exit 2
+		;;
+esac

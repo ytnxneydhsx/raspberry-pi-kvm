@@ -1,0 +1,14 @@
+[Unit]
+Description=H96 Max V58 USB ACM gadget
+After=sys-kernel-config.mount systemd-modules-load.service
+Wants=sys-kernel-config.mount
+Before=serial-getty@ttyGS0.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/h96-usb-gadget start
+ExecStop=/usr/local/sbin/h96-usb-gadget stop
+
+[Install]
+WantedBy=multi-user.target
