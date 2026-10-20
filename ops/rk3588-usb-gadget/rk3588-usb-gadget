@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+mountpoint -q /sys/kernel/config || mount -t configfs configfs /sys/kernel/config
+
+G=/sys/kernel/config/usb_gadget/rk3588_linux
+mkdir -p "$G"
+
+# A running ACM-only recovery gadget must be unbound before NCM is added.
+if [ -e "$G/UDC" ] && [ -n "$(cat "$G/UDC" 2>/dev/null)" ]; then
+	printf '\n' > "$G/UDC"
+fi
+
+printf '0x1d6b\n' > "$G/idVendor"
+printf '0x0104\n' > "$G/idProduct"
+printf '0x0200\n' > "$G/bcdUSB"
+printf '0x0100\n' > "$G/bcdDevice"
+printf 'high-speed\n' > "$G/max_speed"
+printf '0xEF\n' > "$G/bDeviceClass"
+printf '0x02\n' > "$G/bDeviceSubClass"
+printf '0x01\n' > "$G/bDeviceProtocol"
+
+mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409"
+printf '22b2617583d2c0b7-linux\n' > "$G/strings/0x409/serialnumber"
+printf 'RK3588 Linux\n' > "$G/strings/0x409/manufacturer"
+printf 'RK3588 Ubuntu Console\n' > "$G/strings/0x409/product"
+printf 'CDC ACM console + NCM network\n' > "$G/configs/c.1/strings/0x409/configuration"
+printf '0xC0\n' > "$G/configs/c.1/bmAttributes"
+printf '2\n' > "$G/configs/c.1/MaxPower"
+
+mkdir -p "$G/functions/acm.usb0"
+if [ ! -L "$G/configs/c.1/acm.usb0" ]; then
+	ln -s "$G/functions/acm.usb0" "$G/configs/c.1/acm.usb0"
+fi
+
+mkdir -p "$G/functions/ncm.usb0"
+printf '02:35:88:00:00:01\n' > "$G/functions/ncm.usb0/dev_addr"
+printf '02:35:88:00:00:02\n' > "$G/functions/ncm.usb0/host_addr"
+if [ ! -L "$G/configs/c.1/ncm.usb0" ]; then
+	ln -s "$G/functions/ncm.usb0" "$G/configs/c.1/ncm.usb0"
+fi
+
+count=0
+while [ ! -e /sys/class/udc/fc000000.usb ] && [ "$count" -lt 30 ]; do
+	sleep 1
+	count=$((count + 1))
+done
+test -e /sys/class/udc/fc000000.usb
+printf 'fc000000.usb\n' > "$G/UDC"
