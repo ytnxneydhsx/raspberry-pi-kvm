@@ -3,11 +3,11 @@
 This directory contains reproducible tools used to validate the RK3588 NPU
 before moving individual MeanVC2 stages from PyTorch CPU inference to RKNN.
 
-The board keeps the installed RKNN 2.3.2 runtime intact. Complete Transformer
-graphs are converted with RKNN Toolkit2 2.5.0 and run through an isolated
-Lite2 2.5.0 mount namespace. The current kernel exposes RKNPU driver 0.8.2;
-the runtime works for the tests below while recommending driver 0.8.8 or
-newer.
+The board keeps its system RKNN runtime intact. All production ASR, DiT, and
+Vocos RKNN graphs are converted with RKNN Toolkit2 2.5.0 and run through an
+isolated Lite2 2.5.0 mount namespace. The current kernel exposes RKNPU driver
+0.8.2; the runtime works for the tests below while recommending driver 0.8.8
+or newer.
 
 ## NPU smoke test
 
@@ -63,6 +63,16 @@ on the CPU avoids complex-number operators that RKNN does not support.
 12-frame startup RKNN backbone, so the first and steady-state Vocos neural
 calls both use the NPU. The original projection, ISTFT, and overlap-add remain
 on the CPU.
+
+Both Vocos backbones now use Toolkit2 2.5.0. The steady 14-frame model is
+`vocos_backbone_14_fp16_rknn250.rknn` with SHA256
+`852b6c8d640ba7414728754b2739b9f6b9a76aadc166fca734e957da36e36a0d`.
+On the board, 50 repeated calls averaged 4.058 ms, spectral cosine similarity
+was 0.99997580, and all hidden, spectral, and waveform outputs were finite. A
+full 5.79-second regression run measured 222.593 ms cold-start first output,
+74.724 ms median / 129.160 ms P95 steady packet processing, and 0.639702 RTF.
+It used 48 Vocos NPU calls with zero fallback, and its waveform was sample-for-
+sample identical to the previously accepted quality-path output.
 
 ## Combined file pipeline
 

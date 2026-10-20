@@ -23,7 +23,7 @@ exec sudo -n unshare --mount --propagation private sh -c '
     "$root/npu/artifacts/meanvc2_dit_startup_0_fp16_rknn250.rknn" \
     "$root/npu/artifacts/meanvc2_dit_startup_1_fp16_rknn250.rknn" \
     "$root/npu/artifacts/meanvc2_dit_startup_2_fp16_rknn250.rknn" \
-  --vocos-rknn "$root/npu/artifacts/vocos_backbone_14_fp16.rknn" \
+  --vocos-rknn "$root/npu/artifacts/vocos_backbone_14_fp16_rknn250.rknn" \
   --vocos-startup-rknn "$root/npu/artifacts/vocos_backbone_12_fp16_rknn250.rknn" \
   --threads "$threads" \
   "$@"
