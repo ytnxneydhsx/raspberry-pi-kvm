@@ -23,21 +23,56 @@ def load_meanvc_runtime(root: Path):
 class VocosNpuMixin:
     """Replace the fixed 14-frame Vocos backbone with RKNN inference."""
 
-    def init_vocos_npu(self, model_path: Path) -> None:
+    def init_vocos_npu(
+        self,
+        model_path: Path,
+        startup_model_path: Path | None = None,
+        warmup: bool = False,
+    ) -> None:
         self.vocos_npu = RKNNLite(verbose=False)
         if self.vocos_npu.load_rknn(str(model_path)) != 0:
             raise RuntimeError(f"failed to load Vocos RKNN model: {model_path}")
         if self.vocos_npu.init_runtime(core_mask=RKNNLite.NPU_CORE_ALL) != 0:
             raise RuntimeError("failed to initialize RKNN runtime")
+        self.vocos_startup_npu = None
+        if startup_model_path is not None:
+            self.vocos_startup_npu = RKNNLite(verbose=False)
+            if self.vocos_startup_npu.load_rknn(str(startup_model_path)) != 0:
+                raise RuntimeError(
+                    f"failed to load startup Vocos RKNN model: {startup_model_path}"
+                )
+            if (
+                self.vocos_startup_npu.init_runtime(
+                    core_mask=RKNNLite.NPU_CORE_ALL
+                )
+                != 0
+            ):
+                raise RuntimeError("failed to initialize startup Vocos RKNN runtime")
         self.vocos_npu_calls = 0
         self.vocos_cpu_calls = 0
         self.vocos_npu_seconds = 0.0
         self.vocos_cpu_seconds = 0.0
+        self.vocos_runtime_warmup_seconds = 0.0
+        if warmup:
+            started = time.perf_counter()
+            self.vocos_npu.inference(
+                inputs=[np.zeros((1, 80, 14), dtype=np.float32)]
+            )
+            if self.vocos_startup_npu is not None:
+                self.vocos_startup_npu.inference(
+                    inputs=[np.zeros((1, 80, 12), dtype=np.float32)]
+                )
+            with torch.no_grad():
+                self.vocoder.decode(torch.full((1, 80, 12), 0.5))
+            self.vocos_runtime_warmup_seconds = time.perf_counter() - started
 
     def close_vocos_npu(self) -> None:
         if getattr(self, "vocos_npu", None) is not None:
             self.vocos_npu.release()
             self.vocos_npu = None
+        if getattr(self, "vocos_startup_npu", None) is not None:
+            self.vocos_startup_npu.release()
+            self.vocos_startup_npu = None
 
     def _decode_mel(self, mel: torch.Tensor) -> np.ndarray:
         with torch.no_grad():
@@ -47,8 +82,15 @@ class VocosNpuMixin:
             mel = (mel + 1) / 2
 
             started = time.perf_counter()
-            if mel.shape[-1] == 14:
-                hidden_np = self.vocos_npu.inference(
+            if mel.shape[-1] in (12, 14) and (
+                mel.shape[-1] == 14 or self.vocos_startup_npu is not None
+            ):
+                runtime = (
+                    self.vocos_startup_npu
+                    if mel.shape[-1] == 12
+                    else self.vocos_npu
+                )
+                hidden_np = runtime.inference(
                     inputs=[mel.detach().cpu().numpy().astype(np.float32)]
                 )[0]
                 hidden = torch.from_numpy(hidden_np.astype(np.float32, copy=False))

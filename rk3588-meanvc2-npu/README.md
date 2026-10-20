@@ -37,12 +37,13 @@ compared with about 92 ms per four-big-core CPU call.
 
 ## MeanVC2 streaming DiT
 
-`export_meanvc2_dit_streaming_onnx.py` exports the steady-state 120 ms DiT
-step with its four KV caches. The first three chunks run on the CPU to grow
-the caches to fixed sizes; later chunks use the RKNN graph. Cache tensors are
-flattened to three dimensions at the RKNN boundary and restored inside the
-graph, avoiding the same four-dimensional layout conversion issue found in
-the ASR model.
+`export_meanvc2_dit_startup_onnx.py` exports three fixed startup graphs: empty
+KV cache, 12-frame cache, and 24-frame cache. They preserve the real cache
+history from the first chunk onward. `export_meanvc2_dit_streaming_onnx.py`
+exports the steady-state graph with cache lengths 36/36/24/24. Cache tensors
+are flattened to three dimensions at every RKNN boundary and restored inside
+the graph, avoiding the same four-dimensional layout conversion issue found
+in the ASR model.
 
 The steady-state graph runs in about 20.5 ms per ODE call. Twelve consecutive
 cache updates kept velocity cosine similarity between 0.99196 and 0.99574.
@@ -58,13 +59,14 @@ CPU and compares the final waveform. Keeping the small projection and ISTFT
 on the CPU avoids complex-number operators that RKNN does not support.
 
 `run_meanvc2_vocos_npu.py` integrates the 14-frame RKNN backbone into the
-120 ms MeanVC2 file pipeline. The first 12-frame Vocos call stays on the CPU;
-subsequent steady-state calls use the NPU, followed by the original projection,
-ISTFT, and overlap-add code on the CPU.
+120 ms MeanVC2 file pipeline. The combined runner additionally loads a
+12-frame startup RKNN backbone, so the first and steady-state Vocos neural
+calls both use the NPU. The original projection, ISTFT, and overlap-add remain
+on the CPU.
 
 ## Combined file pipeline
 
-Run the balanced pipeline on the board with:
+Run the quality-protected low-latency pipeline on the board with:
 
 ```bash
 cd /home/huangnv/MeanVC2
@@ -75,15 +77,19 @@ cd /home/huangnv/MeanVC2
   --seed 42
 ```
 
-The default uses NPU ASR, one NPU DiT ODE step followed by one CPU correction
-step, and the NPU Vocos backbone. Select another mode with:
+The default uses NPU ASR, an immediate empty-cache NPU DiT first chunk, two
+CPU DiT chunks to establish numerically accurate history, steady-state NPU
+DiT, and NPU Vocos. Select another mode with:
 
 ```bash
 # Fidelity-oriented: ASR and Vocos NPU, DiT CPU
 ./npu/run-rk3588-npu.sh --dit-npu-steps 0 ...
 
-# Fastest: both DiT ODE steps on NPU
-./npu/run-rk3588-npu.sh --dit-npu-steps 2 ...
+# Balanced numerical path: one DiT NPU step and one CPU correction
+./npu/run-rk3588-npu.sh --dit-npu-steps 1 ...
+
+# Experimental strict NPU DiT startup (lower first-syllable fidelity)
+./npu/run-rk3588-npu.sh --dit-startup-policy all-npu ...
 
 # ASR CPU comparison
 ./npu/run-rk3588-npu.sh --asr-device cpu ...
@@ -98,6 +104,34 @@ For the 5.79 second fixture on the four big CPU cores:
 | ASR + Vocos NPU, DiT CPU | 6.4 s | 1.100 |
 | Balanced, one DiT NPU step | 5.0 s | 0.871 |
 | Fastest, two DiT NPU steps | 4.1 s | 0.704 |
+
+## Cold-start warm-up
+
+The 120 ms model receives 160 ms (2560 samples) per input packet. A normal
+Kaldi fbank call produces 14 real frames from the first packet, while the
+Fast-U2++ graph needs a 19-frame window. The runner initializes `frame_cache`
+with five genuine Kaldi silence-feature frames exactly once. The first ASR
+window is therefore 5 silence + 14 real frames. With stride 16 it retains the
+last three real frames; the second packet adds 16 new frames, so the next
+window is continuous and does not duplicate or drop a real frame. ASR offset
+advances once per actual encoder call (8 -> 12 -> 16).
+
+The empty/12/24-frame RKNN graphs make a strict NPU startup available. FP16
+errors in the growing cache graphs audibly affect the first syllable, so the
+default protects quality: the empty-cache graph emits the first chunk on NPU,
+its exact KV state is rebuilt between packets, the next two chunks grow that
+state on CPU, and the fourth chunk switches to the steady RKNN graph. Runtime
+contexts are primed before audio starts. The first waveform boundary retains
+the existing 160-sample (10 ms) overlap crossfade.
+
+Three repeated default runs of the 5.79 second fixture measured a median
+estimated first-output latency of 215.2 ms (160 ms input plus 55.2 ms
+processing), steady 160 ms packet processing of 75.2 ms median / 130.4 ms P95,
+and median RTF 0.642. The first 200 ms of voiced output, aligned against the
+same warm-start path with CPU DiT, measured correlation 0.974 and SNR 12.08 dB.
+The experimental strict-NPU startup reached about 216 ms first output, while
+first-200-ms correlation fell to roughly 0.56 even with cache repair; it is
+kept as a diagnostic mode rather than the production default.
 
 All generated waveforms were finite and unclipped. The balanced and fastest
 modes intentionally trade some numerical fidelity for latency; listen to the
