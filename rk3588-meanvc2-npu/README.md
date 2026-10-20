@@ -76,6 +76,22 @@ sample identical to the previously accepted quality-path output.
 
 ## Combined file pipeline
 
+The NPU runners accept a pre-extracted 256-dimensional speaker embedding and
+select the PyTorch CPU thread count. Apply the tracked compatibility patch to
+an upstream MeanVC2 checkout before copying this directory into `npu/`:
+
+```bash
+cd /home/huangnv/MeanVC2
+patch --forward -p0 < npu/patches/run_rt-target-embedding.patch
+python -m py_compile runtime/run_rt.py
+```
+
+The patch preserves raw ECAPA embedding scale, validates the `.npy` shape, and
+avoids loading the 1.3 GB WavLM speaker encoder during latency-sensitive file
+or streaming inference. If `patch` reports that the hunk was already applied,
+verify that `VCRunner.__init__` accepts both `target_emb` and `threads` before
+continuing.
+
 Run the quality-protected low-latency pipeline on the board with:
 
 ```bash
@@ -148,3 +164,17 @@ modes intentionally trade some numerical fidelity for latency; listen to the
 fixture outputs before choosing a production default. Driver 0.8.2 remains an
 open platform limitation because Toolkit2/Lite2 2.5.0 recommends 0.8.8 or
 newer.
+
+## Recovery validation on 2026-10-21
+
+After the pure-Linux recovery, all RKNN graphs and the isolated Lite2 runtime
+were restored with Toolkit2/Lite2 2.5.0. The 5.79-second fixture produced
+sample-identical output across three repeated quality-protected runs. Their
+aggregate measurements were 217.504 ms mean first output, 76.019 ms mean
+steady median, 132.054 ms mean steady P95, and 0.649 mean RTF.
+
+The diagnostic `all-npu` DiT startup measured 194.032 ms first output and
+0.489880 RTF. It still performs asynchronous CPU cache reconstruction and the
+Vocos complex ISTFT stays on the CPU. The CPU-DiT comparison measured
+310.618 ms first output and 1.115232 RTF. All three output waveforms were
+finite, mono 16 kHz, 5.75 seconds long, and unclipped.
