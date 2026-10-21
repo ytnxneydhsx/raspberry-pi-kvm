@@ -13,3 +13,11 @@ localIP = "127.0.0.1"
 localPort = 22
 remotePort = 7003
 transport.useEncryption = true
+
+[[proxies]]
+name = "rk3588-huangnv-ssh"
+type = "tcp"
+localIP = "169.254.4.1"
+localPort = 22
+remotePort = 7004
+transport.useEncryption = true
